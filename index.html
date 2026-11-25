@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>CD70 Package Builder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: packages and parts on the left, sticky package/cart on the right. One column on phones. */
+:root {
+  --bg: #edefec;
+  --surface: #f8f9f6;
+  --surface2: #e3e8e3;
+  --ink: #17201d;
+  --muted: #55625c;
+  --line: #cbd2cb;
+  --accent: #c4361d;
+  --accent-ink: #ffffff;
+  --ok: #1d6b62;
+  --ok-ink: #ffffff;
+  --font-head: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121816; --surface: #1a2321; --surface2: #25312e; --ink: #e8eee9; --muted: #9aa9a2;
+    --line: #2f3d39; --accent: #ef6a4f; --accent-ink: #1a0d09; --ok: #5fc2b6; --ok-ink: #0b1d1a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121816; --surface: #1a2321; --surface2: #25312e; --ink: #e8eee9; --muted: #9aa9a2;
+  --line: #2f3d39; --accent: #ef6a4f; --accent-ink: #1a0d09; --ok: #5fc2b6; --ok-ink: #0b1d1a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1, h2, h3 { font-family: var(--font-head); margin: 0; text-wrap: balance; line-height: 1.15; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); letter-spacing: -0.01em; }
+h2 { font-size: 1.2rem; }
+h3 { font-size: 1rem; }
+p { margin: 0; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.note { font-size: 0.82rem; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
+
+header { display: flex; flex-direction: column; gap: 6px; }
+header p { color: var(--muted); max-width: 62ch; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 390px); gap: 20px; align-items: start; }
+.left { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+.sec { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cartcol { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+@media (max-width: 860px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .cartcol { position: static; max-height: none; }
+  body { padding-bottom: 90px; }
+}
+
+/* Packages */
+.pkgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.pkg { display: flex; flex-direction: column; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+.pkg p { color: var(--muted); font-size: 0.85rem; flex: 1; }
+.pkg .meta { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-variant-numeric: tabular-nums; }
+.pkg .price { font-family: var(--font-head); font-weight: 700; font-size: 1.1rem; }
+.pkg .off { color: var(--ok); font-size: 0.78rem; font-weight: 600; }
+.pkg .warn { font-size: 0.78rem; font-weight: 600; color: var(--accent); }
+.pkg.on { border-color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+
+/* Parts */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 5px 12px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; font-size: 0.85rem; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.search { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 9px 12px; width: 100%; }
+.plist { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.prow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 14px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.prow:last-child { border-bottom: none; }
+.prow .nm { min-width: 0; }
+.prow .nm b { font-weight: 500; }
+.prow .nm span { display: block; font-size: 0.78rem; color: var(--muted); }
+.prow .pr { font-family: var(--font-head); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.prow.in { background: var(--surface2); }
+.none { padding: 16px; color: var(--muted); }
+
+.btn { border: 1px solid var(--ink); background: var(--surface); padding: 8px 14px; border-radius: 6px; font-weight: 600; }
+.btn:hover { background: var(--surface2); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.wa { background: var(--ok); color: var(--ok-ink); border-color: var(--ok); text-decoration: none; display: inline-block; text-align: center; }
+.btn.wa:hover { filter: brightness(1.08); }
+.btn.small { padding: 6px 12px; }
+.btn.link { border: none; background: none; padding: 2px 4px; color: var(--muted); font-weight: 500; text-decoration: underline; }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--ink); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.stepper button { border: none; background: transparent; width: 30px; height: 30px; font-weight: 700; font-size: 1rem; line-height: 1; }
+.stepper button:hover { background: var(--surface2); }
+.stepper span { min-width: 28px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Cart */
+.lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.line .what b { font-weight: 500; display: block; }
+.line .what span { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.line .ctrl { display: flex; align-items: center; gap: 8px; }
+.line .p { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.empty { color: var(--muted); padding: 8px 0; }
+.sums { display: flex; flex-direction: column; gap: 4px; font-variant-numeric: tabular-nums; }
+.sums div { display: flex; justify-content: space-between; gap: 12px; }
+.sums .grand { font-family: var(--font-head); font-weight: 700; font-size: 1.25rem; padding-top: 6px; border-top: 1px solid var(--ink); }
+.sums .disc { color: var(--ok); }
+.sums .fit { color: var(--muted); font-size: 0.85rem; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field input, .field select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: 100%; min-width: 0; }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 0.9rem; }
+.check input { margin-top: 4px; }
+.msg { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--font-body); font-size: 0.8rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; max-height: 170px; overflow: auto; color: var(--muted); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions .btn { flex: 1 1 140px; }
+.status { min-height: 1.3em; font-size: 0.85rem; font-weight: 600; color: var(--ok); }
+
+.bar { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--ink); color: var(--bg); border: none; width: 100%; text-align: left;
+  padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  justify-content: space-between; gap: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (max-width: 860px) { .bar:not([hidden]) { display: flex; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="label">Usmans Bikerz Studio &middot; Rawalpindi</span>
+    <h1>Build your CD70 package</h1>
+    <p>Pick a ready-made package or choose your own parts. See every price. Send your list to us on WhatsApp, or download an estimate. Fitting is quoted by our mechanic before you pay. Delivery inside Rawalpindi only.</p>
+  </header>
+
+  <div class="grid">
+    <div class="left">
+      <section class="sec" aria-labelledby="pk-h">
+        <div>
+          <h2 id="pk-h">Ready-made packages</h2>
+          <p class="note">Each one is a full job. You can change any part after you load it.</p>
+        </div>
+        <div class="pkgs" id="pkgs"></div>
+      </section>
+
+      <section class="sec" aria-labelledby="pt-h">
+        <h2 id="pt-h">Choose your own parts</h2>
+        <div class="chips" id="chips" role="group" aria-label="Part categories"></div>
+        <input class="search" id="search" type="search" placeholder="Search parts, e.g. clutch, cable, seat" aria-label="Search parts">
+        <div class="plist" id="plist"></div>
+      </section>
+    </div>
+
+    <aside class="card cartcol" id="cart" aria-labelledby="ct-h">
+      <h2 id="ct-h">Your package</h2>
+      <ul class="lines" id="lines"></ul>
+      <div class="sums" id="sums"></div>
+
+      <div class="fields">
+        <div class="field"><label class="label" for="bike">Your bike</label>
+          <select id="bike"><option value="">Select</option><option>Honda CD70</option><option>Honda 125 / CG125</option><option>Other bike</option></select></div>
+        <div class="field"><label class="label" for="year">Model year</label><input id="year" type="text" inputmode="numeric" placeholder="e.g. 2018"></div>
+        <div class="field"><label class="label" for="cname">Your name</label><input id="cname" type="text" autocomplete="name"></div>
+        <div class="field"><label class="label" for="carea">Area</label><input id="carea" type="text" placeholder="e.g. Satellite Town"></div>
+      </div>
+      <label class="check"><input id="fit" type="checkbox"><span>I want fitting. Our mechanic will quote the charge on WhatsApp before you pay.</span></label>
+
+      <pre class="msg" id="msg"></pre>
+      <div class="actions">
+        <a class="btn wa" id="waLink" href="https://wa.me/" target="_blank" rel="noopener">Send on WhatsApp</a>
+        <button class="btn" id="pdfBtn" type="button">Download PDF estimate</button>
+      </div>
+      <div class="actions">
+        <button class="btn" id="copyBtn" type="button">Copy text</button>
+        <button class="btn link" id="clearBtn" type="button">Clear package</button>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <p class="note">We confirm fitment from your bike model and year before you pay. Pay cash on delivery, or send an advance by Easypaisa or JazzCash after we confirm. The PDF is an estimate, valid for 3 days. It is not a final invoice.</p>
+    </aside>
+  </div>
+</div>
+<button class="bar" id="bar" type="button" hidden><span id="barTxt"></span><span>View package &rarr;</span></button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function () {
+  // Put your shop WhatsApp number here, digits only with country code, e.g. "923001234567".
+  // If it is empty, the customer chooses the contact in WhatsApp.
+  var SHOP_WHATSAPP = "";
+
+  /*DATA*/
+  // id, name as shown, price per unit (Rs), unit, category. Prices are from your three invoices.
+  var RAW = [
+    ['a1','Battery (AGS)',1350,'piece','Electrical'],
+    ['a2','Brake shoe, CD70 (SM, green)',250,'piece','Wheels & brakes'],
+    ['a3','Brake cable, CD70 (CRLF)',175,'piece','Controls & cables'],
+    ['a4','Clutch cable, CD70 Euro (CRLF)',175,'piece','Controls & cables'],
+    ['a5','Accelerator cable, CD70 (CRLF)',175,'piece','Controls & cables'],
+    ['a6','Meter cable, CD70 (CRLF)',175,'piece','Controls & cables'],
+    ['a7','Chain cover, silver, CD70 (SK)',600,'piece','Body & look'],
+    ['a8','Chain sprocket kit, CD70 (Oditor)',1100,'kit','Chain & drive'],
+    ['a9','Chimta bush, CD70 (CRLF)',150,'set','Small parts'],
+    ['a10','Drum rubber tyre, CD70',40,'set','Small parts'],
+    ['a11','Dumchi front, CD70 (RS)',35,'piece','Small parts'],
+    ['a12','Dumchi rear, CD70 (RS)',35,'piece','Small parts'],
+    ['a13','Foot rest rubber, CD70 (Supreme RS)',80,'set','Body & look'],
+    ['a14','Front shock (Hero, NHA)',4400,'piece','Suspension'],
+    ['a15','Handle gutka, CD70 (CRLF)',450,'set','Controls & cables'],
+    ['a16','Indicator set S014 (Mokypro)',160,'set','Electrical'],
+    ['a17','Kick, CD70, new (FAH)',350,'piece','Engine & clutch'],
+    ['a18','Clutch lever, CD100 (RS)',130,'piece','Controls & cables'],
+    ['a19','Meter complete, CD70 (Rocco)',650,'piece','Electrical'],
+    ['a20','Seat, CD70, molty foam (SP)',3300,'piece','Body & look'],
+    ['a21','Switch kit 3 pcs, CD70 (CRLF)',980,'piece','Electrical'],
+    ['a22','Tanki tapa set, red, CD70 (Rocco)',2800,'set','Body & look'],
+    ['b1','Bearing 6203 (CRLF)',150,'piece','Bearings & seals'],
+    ['b2','Brake rod, CD70 (RS)',150,'piece','Wheels & brakes'],
+    ['b3','Chain chirri big, CD70 (RS)',50,'piece','Chain & drive'],
+    ['b4','Chain chirri big classic, CD70',50,'piece','Chain & drive'],
+    ['b5','Chain cover rubber, CD70 (RS)',10,'piece','Small parts'],
+    ['b6','Flasher sound (Supra)',120,'piece','Electrical'],
+    ['b7','Foot rest bolt 14 no, double washer (RS)',20,'piece','Small parts'],
+    ['b8','Fuel cock, CD70 (CRLF)',280,'piece','Fuel'],
+    ['b9','Meter gear set (Hero, RS)',190,'set','Electrical'],
+    ['b10','Petrol pipe (FAH)',30,'piece','Fuel'],
+    ['b11','Clutch seal 12.21.4, CD70 (RS)',70,'piece','Bearings & seals'],
+    ['b12','Shock bush, CD70 (RS)',40,'piece','Suspension'],
+    ['b13','Shock glass (Hero/125 big classic)',350,'piece','Suspension'],
+    ['b14','Shock rib, CD70 (RS)',60,'set','Suspension'],
+    ['b15','Side cover lock, CD70 (SM, SP)',90,'piece','Body & look'],
+    ['b16','Silencer washer, CD70 (RS)',30,'piece','Small parts'],
+    ['b17','Tanki monogram (QHT)',200,'set','Body & look'],
+    ['b18','Tapped screw, CD70 (CRLF)',40,'piece','Small parts'],
+    ['b19','Wheel sleeve, silver, CD70 (SP, CN RS)',90,'piece','Wheels & brakes'],
+    ['c1','Bearing 6000 (CRLF)',100,'piece','Bearings & seals'],
+    ['c2','Clutch box bush, CD70 (CRLF)',80,'piece','Engine & clutch'],
+    ['c3','Clutch box tikki gain, CD70 (RS)',20,'piece','Engine & clutch'],
+    ['c4','Clutch katora, CD70 (CRLF)',450,'piece','Engine & clutch'],
+    ['c5','Clutch plate, CD70 (CRLF)',180,'set','Engine & clutch'],
+    ['c6','Clutch pusher, CD70 (CRLF)',70,'piece','Engine & clutch'],
+    ['c7','Clutch side gain, CD70 (CRLF)',60,'piece','Engine & clutch'],
+    ['c8','Head cam shaft (Hero, CRLF)',650,'piece','Engine & clutch'],
+    ['c9','Oil through kit (CRLF)',70,'set','Engine & clutch'],
+    ['c10','Piston kit 150 (Hero, CRLF)',740,'kit','Engine & clutch'],
+    ['c11','Pressure plate set, CD70 (CRLF)',150,'set','Engine & clutch'],
+    ['c12','Rocker set, CD70 (CRLF)',390,'set','Engine & clutch'],
+    ['c13','Valve set (Hero, CRLF)',450,'set','Engine & clutch']
+  ];
+  var PARTS = RAW.map(function (r) { return { id: r[0], name: r[1], rate: r[2], unit: r[3], cat: r[4] }; });
+  var CATS = ['Engine & clutch','Chain & drive','Electrical','Controls & cables','Suspension','Body & look','Wheels & brakes','Fuel','Bearings & seals','Small parts'];
+
+  var BIG = [], i;
+  for (i = 1; i <= 22; i++) BIG.push(['a' + i, i === 16 ? 2 : 1]);
+  var SMALLBOX = [], sbq = { b5: 4, b12: 2, b15: 2, b16: 2, b18: 2 };
+  for (i = 1; i <= 19; i++) SMALLBOX.push(['b' + i, sbq['b' + i] || 1]);
+
+  // off = rupees taken off the package total, as on your invoices.
+  var PACKAGES = [
+    { id: 'clutch', name: 'Clutch overhaul', off: 0, warn: '',
+      blurb: 'Plate, pressure plate set, katora, pusher, bush, gains and clutch seal for a clutch rebuild.',
+      items: [['c2',1],['c3',1],['c4',1],['c5',1],['c6',1],['c7',1],['c11',1],['b11',1]] },
+    { id: 'topend', name: 'Top-end engine kit', off: 0, warn: 'We confirm your engine size before you order.',
+      blurb: 'Cam shaft, piston kit 150, valve set, rocker set and oil through kit.',
+      items: [['c8',1],['c9',1],['c10',1],['c12',1],['c13',1]] },
+    { id: 'chain', name: 'Chain and drive refresh', off: 0, warn: '',
+      blurb: 'Sprocket kit, chimta bush, two chain chirri and four chain cover rubbers.',
+      items: [['a8',1],['a9',1],['b3',1],['b4',1],['b5',4]] },
+    { id: 'cables', name: 'Full cable set', off: 72, warn: '',
+      blurb: 'Brake, clutch, accelerator and meter cables with a set discount.',
+      items: [['a3',1],['a4',1],['a5',1],['a6',1]] },
+    { id: 'look', name: 'Look upgrade', off: 0, warn: '',
+      blurb: 'Seat, tanki tapa set, tanki monogram, silver chain cover and indicators.',
+      items: [['a20',1],['a22',1],['b17',1],['a7',1],['a16',1]] },
+    { id: 'big', name: 'Big refresh (22 parts)', off: 87, warn: '',
+      blurb: 'Battery, shock, seat, switches, meter, cables, sprocket kit, tanki tapa set and more, with a package discount.',
+      items: BIG },
+    { id: 'workshop', name: 'Workshop small-spares box', off: 0, warn: '',
+      blurb: 'Bearing, rod, bolts, washers, seals, bushes, locks, screws and rubbers for a workshop shelf.',
+      items: SMALLBOX }
+  ];
+  /*ENDDATA*/
+
+  var cart = {};
+  var cat = 'All';
+  var q = '';
+
+  function $(id) { return document.getElementById(id); }
+  function fmt(n) { return 'Rs ' + Math.round(n).toLocaleString('en-US'); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function part(id) { for (var k = 0; k < PARTS.length; k++) if (PARTS[k].id === id) return PARTS[k]; return null; }
+  function pkgList(p) { var t = 0; p.items.forEach(function (it) { t += part(it[0]).rate * it[1]; }); return t; }
+  function pkgTotal(p) { return pkgList(p) - p.off; }
+  function count() { return Object.keys(cart).length; }
+  function subtotal() { var t = 0; Object.keys(cart).forEach(function (id) { t += part(id).rate * cart[id]; }); return t; }
+  function matches(p) {
+    if (Object.keys(cart).length !== p.items.length) return false;
+    return p.items.every(function (it) { return cart[it[0]] === it[1]; });
+  }
+  function discount() { var d = 0; PACKAGES.forEach(function (p) { if (p.off > 0 && matches(p)) d += p.off; }); return d; }
+  function total() { return subtotal() - discount(); }
+  function setQty(id, n) { if (n <= 0) delete cart[id]; else cart[id] = n; render(); }
+
+  var tt;
+  function toast(t) { $('status').textContent = t; clearTimeout(tt); tt = setTimeout(function () { $('status').textContent = ''; }, 4000); }
+
+  function stepper(id) {
+    var s = el('div', 'stepper');
+    var m = el('button', '', '−'); m.type = 'button'; m.setAttribute('aria-label', 'Less ' + part(id).name);
+    var n = el('span', '', String(cart[id]));
+    var p = el('button', '', '+'); p.type = 'button'; p.setAttribute('aria-label', 'More ' + part(id).name);
+    m.addEventListener('click', function () { setQty(id, cart[id] - 1); });
+    p.addEventListener('click', function () { setQty(id, cart[id] + 1); });
+    s.appendChild(m); s.appendChild(n); s.appendChild(p);
+    return s;
+  }
+
+  function renderPkgs() {
+    var box = $('pkgs'); box.textContent = '';
+    PACKAGES.forEach(function (p) {
+      var c = el('div', 'pkg' + (matches(p) ? ' on' : ''));
+      c.appendChild(el('h3', '', p.name));
+      c.appendChild(el('p', '', p.blurb));
+      if (p.warn) c.appendChild(el('span', 'warn', p.warn));
+      var meta = el('div', 'meta');
+      meta.appendChild(el('span', 'price', fmt(pkgTotal(p))));
+      meta.appendChild(el('span', 'note', p.items.length + ' parts'));
+      c.appendChild(meta);
+      if (p.off > 0) c.appendChild(el('span', 'off', 'Includes ' + fmt(p.off) + ' package discount'));
+      var b = el('button', 'btn primary small', matches(p) ? 'Loaded' : 'Use this package');
+      b.type = 'button';
+      b.addEventListener('click', function () {
+        cart = {};
+        p.items.forEach(function (it) { cart[it[0]] = it[1]; });
+        render();
+        toast(p.name + ' loaded. You can change any part.');
+        if (window.matchMedia('(max-width: 860px)').matches) $('cart').scrollIntoView();
+      });
+      c.appendChild(b);
+      box.appendChild(c);
+    });
+  }
+
+  function renderChips() {
+    var box = $('chips'); box.textContent = '';
+    ['All'].concat(CATS).forEach(function (c) {
+      var b = el('button', 'chip', c); b.type = 'button';
+      b.setAttribute('aria-pressed', c === cat ? 'true' : 'false');
+      b.addEventListener('click', function () { cat = c; renderChips(); renderParts(); });
+      box.appendChild(b);
+    });
+  }
+
+  function renderParts() {
+    var box = $('plist'); box.textContent = '';
+    var term = q.trim().toLowerCase();
+    var shown = PARTS.filter(function (p) {
+      return (cat === 'All' || p.cat === cat) && (!term || p.name.toLowerCase().indexOf(term) !== -1);
+    });
+    if (!shown.length) { box.appendChild(el('div', 'none', 'No parts match. Try another word or category.')); return; }
+    shown.forEach(function (p) {
+      var row = el('div', 'prow' + (cart[p.id] ? ' in' : ''));
+      var nm = el('div', 'nm');
+      nm.appendChild(el('b', '', p.name));
+      nm.appendChild(el('span', '', p.cat + ' · price per ' + p.unit));
+      row.appendChild(nm);
+      row.appendChild(el('span', 'pr', fmt(p.rate)));
+      if (cart[p.id]) row.appendChild(stepper(p.id));
+      else {
+        var b = el('button', 'btn small', 'Add'); b.type = 'button';
+        b.setAttribute('aria-label', 'Add ' + p.name);
+        b.addEventListener('click', function () { setQty(p.id, 1); });
+        row.appendChild(b);
+      }
+      box.appendChild(row);
+    });
+  }
+
+  function bikeText() {
+    var b = $('bike').value, y = $('year').value.trim();
+    if (!b && !y) return 'not given';
+    return (b || 'bike not selected') + (y ? ' ' + y : '');
+  }
+
+  function buildMessage() {
+    if (count() === 0) return 'Your order text will appear here after you add parts.';
+    var L = ['Assalam o Alaikum! I want an estimate for my bike.', 'Bike: ' + bikeText(), ''];
+    var n = 0;
+    PARTS.forEach(function (p) {
+      if (!cart[p.id]) return;
+      n += 1;
+      L.push(n + '. ' + p.name + ' x' + cart[p.id] + ' = ' + fmt(p.rate * cart[p.id]));
+    });
+    L.push('');
+    if (discount() > 0) L.push('Package discount: -' + fmt(discount()));
+    L.push('Parts total: ' + fmt(total()));
+    L.push('Fitting: ' + ($('fit').checked ? 'Yes, please quote the fitting charge' : 'Not needed'));
+    var nm = $('cname').value.trim(), ar = $('carea').value.trim();
+    if (nm) L.push('Name: ' + nm);
+    if (ar) L.push('Area: ' + ar + ', Rawalpindi');
+    return L.join('\n');
+  }
+
+  function renderCart() {
+    var ul = $('lines'); ul.textContent = '';
+    PARTS.forEach(function (p) {
+      if (!cart[p.id]) return;
+      var li = el('li', 'line');
+      var w = el('div', 'what');
+      w.appendChild(el('b', '', p.name));
+      w.appendChild(el('span', '', cart[p.id] + ' × ' + fmt(p.rate)));
+      li.appendChild(w);
+      li.appendChild(el('span', 'p', fmt(p.rate * cart[p.id])));
+      var ctrl = el('div', 'ctrl');
+      ctrl.appendChild(stepper(p.id));
+      var rm = el('button', 'btn link', 'Remove'); rm.type = 'button';
+      rm.setAttribute('aria-label', 'Remove ' + p.name);
+      rm.addEventListener('click', function () { setQty(p.id, 0); });
+      ctrl.appendChild(rm);
+      li.appendChild(ctrl);
+      li.style.gridTemplateColumns = 'minmax(0,1fr) auto';
+      ul.appendChild(li);
+    });
+    if (!count()) ul.appendChild(el('li', 'empty', 'Nothing here yet. Pick a ready-made package or add parts from the list.'));
+
+    var s = $('sums'); s.textContent = '';
+    var r1 = el('div'); r1.appendChild(el('span', '', 'Parts (' + count() + ' items)')); r1.appendChild(el('span', '', fmt(subtotal()))); s.appendChild(r1);
+    if (discount() > 0) { var r2 = el('div', 'disc'); r2.appendChild(el('span', '', 'Package discount')); r2.appendChild(el('span', '', '-' + fmt(discount()))); s.appendChild(r2); }
+    var g = el('div', 'grand'); g.appendChild(el('span', '', 'Parts total')); g.appendChild(el('span', '', fmt(total()))); s.appendChild(g);
+    var f = el('div', 'fit'); f.appendChild(el('span', '', 'Fitting charge')); f.appendChild(el('span', '', $('fit').checked ? 'We will quote it' : 'Not selected')); s.appendChild(f);
+    updateMessage();
+  }
+
+  function updateMessage() {
+    var text = buildMessage();
+    $('msg').textContent = text;
+    var base = 'https://wa.me/' + (SHOP_WHATSAPP || '');
+    var has = count() > 0;
+    $('waLink').href = has ? base + '?text=' + encodeURIComponent(text) : base;
+    $('waLink').style.opacity = has ? '1' : '0.5';
+  }
+
+  function renderBar() {
+    var bar = $('bar');
+    bar.hidden = count() === 0;
+    $('barTxt').textContent = count() + ' items · ' + fmt(total());
+  }
+
+  function render() { renderPkgs(); renderParts(); renderCart(); renderBar(); }
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+  function makePdf() {
+    if (count() === 0) { toast('Add at least one part first.'); return; }
+    if (!window.jspdf || !window.jspdf.jsPDF) { toast('The PDF tool did not load. Check your internet and try again.'); return; }
+    try {
+      var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+      var L = 14, R = 196, y = 18;
+      var now = new Date(), until = new Date(now.getTime() + 3 * 86400000);
+      var ds = function (x) { return x.toLocaleDateString('en-GB'); };
+      var qno = 'Q-' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '-' + (100 + Math.floor(Math.random() * 900));
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('Usmans Bikerz Studio', L, y);
+      doc.setFontSize(11); doc.text('ESTIMATE', R, y, { align: 'right' });
+      y += 7; doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+      doc.text('Quote no: ' + qno + '     Date: ' + ds(now) + '     Valid until: ' + ds(until), L, y);
+      y += 5; doc.text('Bike: ' + bikeText(), L, y);
+      var nm = $('cname').value.trim(), ar = $('carea').value.trim();
+      if (nm || ar) { y += 5; doc.text('Customer: ' + (nm || '-') + (ar ? '   Area: ' + ar + ', Rawalpindi' : ''), L, y); }
+      y += 5; doc.line(L, y, R, y); y += 6;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Item', L, y); doc.text('Qty', 140, y, { align: 'right' }); doc.text('Rate', 165, y, { align: 'right' }); doc.text('Amount', R, y, { align: 'right' });
+      y += 3; doc.line(L, y, R, y); y += 5;
+      doc.setFont('helvetica', 'normal');
+      PARTS.forEach(function (p) {
+        if (!cart[p.id]) return;
+        var lines = doc.splitTextToSize(p.name, 112);
+        if (y + lines.length * 4.5 > 272) { doc.addPage(); y = 18; }
+        doc.text(lines, L, y);
+        doc.text(String(cart[p.id]), 140, y, { align: 'right' });
+        doc.text(String(p.rate), 165, y, { align: 'right' });
+        doc.text(String(p.rate * cart[p.id]), R, y, { align: 'right' });
+        y += lines.length * 4.5 + 1.5;
+      });
+      if (y > 250) { doc.addPage(); y = 18; }
+      y += 1; doc.line(L, y, R, y); y += 6;
+      doc.text('Parts', 165, y, { align: 'right' }); doc.text('Rs ' + subtotal().toLocaleString('en-US'), R, y, { align: 'right' });
+      if (discount() > 0) { y += 5; doc.text('Package discount', 165, y, { align: 'right' }); doc.text('-Rs ' + discount().toLocaleString('en-US'), R, y, { align: 'right' }); }
+      y += 6; doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+      doc.text('Parts total', 165, y, { align: 'right' }); doc.text('Rs ' + total().toLocaleString('en-US'), R, y, { align: 'right' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+      y += 6; doc.text('Fitting charge: ' + ($('fit').checked ? 'to be quoted by our mechanic' : 'not selected'), R, y, { align: 'right' });
+      y += 10;
+      var notes = doc.splitTextToSize('This is an estimate, not a final invoice. Prices are valid until the date above. Fitment is confirmed from your bike model and year before payment. The fitting charge, if requested, is confirmed separately on WhatsApp.', R - L);
+      doc.text(notes, L, y);
+      doc.save(qno + '.pdf');
+      toast('PDF estimate downloaded.');
+    } catch (e) { toast('Could not make the PDF. Please send on WhatsApp instead.'); }
+  }
+
+  $('pdfBtn').addEventListener('click', makePdf);
+  $('waLink').addEventListener('click', function (e) { if (count() === 0) { e.preventDefault(); toast('Add at least one part first.'); } });
+  $('copyBtn').addEventListener('click', function () {
+    if (count() === 0) { toast('Add at least one part first.'); return; }
+    var text = buildMessage();
+    var fb = function () {
+      var r = document.createRange(); r.selectNodeContents($('msg'));
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      toast('Press and hold to copy the selected text.');
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { toast('Text copied.'); }, fb);
+      else fb();
+    } catch (e) { fb(); }
+  });
+  $('clearBtn').addEventListener('click', function () { cart = {}; render(); toast('Package cleared.'); });
+  $('search').addEventListener('input', function () { q = $('search').value; renderParts(); });
+  ['bike', 'year', 'cname', 'carea'].forEach(function (id) { $(id).addEventListener('input', updateMessage); $(id).addEventListener('change', updateMessage); });
+  $('fit').addEventListener('change', renderCart);
+  $('bar').addEventListener('click', function () { $('cart').scrollIntoView(); });
+
+  renderChips();
+  render();
+})();
+</script>
+</body>
+</html>
